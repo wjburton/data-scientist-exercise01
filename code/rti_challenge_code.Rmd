@@ -1,0 +1,217 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+## RTI Data Challenge
+<br>
+<br>
+
+###Step 1. Read in and Stage data for analysis
+
+***
+
+```{r}
+library(tidyverse)
+
+#read in data
+records <- read_csv('C:/Users/Will/Documents/MSA/jobs/rti_challenge/data-scientist-exercise01/flat_records.csv',
+                    col_names = F)
+
+#add column names
+names(records) <- c('id', 'age', 'workclass_id', 'education_level_id', #records
+                    'education_num', 'marital_status_id',  #records
+                    'occupation_id','relationship_id', 'race_id', #records
+                    'sex_id', 'capital_gain', 'capital_loss',   #records
+                    'hours_week', 'country_id', 'over_50k', #records
+                    'country_id2','country', #countries
+                    'education_level_id2', 'education_level', #education_levels
+                    'marital_status_id2', 'marital_status', #marital_statuses
+                    'occupation_id2','occupation', #occupations
+                    'race_id2', 'race', #races
+                    'relationship_id2', 'relationship', #relationships
+                    'sex_id2', 'sex', #sexes
+                    'workclass_id2', 'workclass') #workclasses
+
+#replace all ? with NA
+records[records == '?'] <- NA
+
+#Remove the id columns, and convert character columns to factor
+records %>% 
+  select(-contains('id')) %>% 
+  mutate_each(funs(factor(.)), -c(age:hours_week))-> records
+```
+
+```{r}
+#check final dataset dimensions
+dim(records)
+```
+
+***
+<br>
+<br>
+
+###Step 2: Exploratory Analysis
+
+***
+
+```{r}
+head(records)
+```
+
+```{r}
+tail(records)
+```
+
+```{r}
+summary(records)
+```
+<br>
+<br>
+
+####**Variable Distributions**
+<br>
+
+**age: ** <br>
+This distribution looks as expected
+
+```{r}
+  ggplot(records) + geom_histogram(aes(x = age), binwidth = 1)
+```
+<br>
+
+**education_num** <br>
+It is interesting that people typically drop out of highschool their freshman or sophomore years. This also shows that if someone graduates highschool, then most of the time they go on to further education
+
+```{r}
+ggplot(records) + geom_bar(aes(education_num))
+```
+<br>
+
+**capital_gain** 
+
+```{r}
+ggplot(records) + geom_histogram(aes(capital_gain))
+```
+<br>
+
+**capital_gain without 0** <br>
+It is really weird that 100,000 has such a high frequency count? I'm also wondering why there isn't more variability here? I guessing most of the people in the united states aren't actively selling assets or property.. which makes this distribution more sensible. 
+```{r}
+records %>% 
+  filter(capital_gain > 0)%>% 
+  ggplot() + geom_histogram(aes(capital_gain))
+```
+<br>
+
+**capital_loss**  <br>
+This variable distribution looks as expected. Maybe people are more likely to report capital loss accurately since they make money off of it?
+```{r}
+  ggplot(records) + geom_histogram(aes(capital_loss))
+```
+<br>
+
+
+
+**capital_loss without 0**
+```{r}
+records %>% 
+  filter(capital_loss > 0)%>% 
+  ggplot() + geom_histogram(aes(capital_loss))
+```
+<br>
+
+
+**hours_week** <br>
+It is a little odd that there is a hard cutoff here at 100 hours. The distribution makes sense overall though.
+```{r}
+  ggplot(records) + geom_bar(aes(x = hours_week))
+```
+<br>
+
+**hours_week without 40**
+```{r}
+records %>% 
+  filter(hours_week != 40) %>% 
+  ggplot() + geom_bar(aes(x = hours_week))
+```
+<br>
+
+
+**over_50k** <br>
+This distribution looks as expected
+```{r}
+  ggplot(records) + geom_bar(aes(x = over_50k))
+```
+<br>
+
+
+
+**country** <br>
+This distribution looks as expected
+```{r}
+  ggplot(records) + geom_bar(aes(country)) + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+<br>
+
+**Marital Status** <br>
+I did not know the 'never married' proportion was so high?
+```{r}
+ggplot(records) + geom_bar(aes(marital_status)) + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+**Occupation** <br>
+Distribution looks as expected here. Maybe the NA categories consists mainly of unemployed people
+```{r}
+ggplot(records) + geom_bar(aes(occupation)) + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+<br>
+
+
+
+
+**race** <br> 
+I would have thought the proportion of other races would be higher here.
+```{r}
+ggplot(records) + geom_bar(aes(race)) + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+<br>
+
+
+**relationship** <br>
+I'm not sure why the husband field is so much higher than the wife.. Could this be a household survey and the males are filling it out?
+```{r}
+ggplot(records) + geom_bar(aes(relationship)) + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+<br>
+
+**sex** <br>
+The gender difference here is not representative of the US population as a whole. Again, Maybe this can be attributed to a household survey, and the males have been filling them out?
+```{r}
+ggplot(records) + geom_bar(aes(sex)) + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+<br>
+
+
+**workclass** <br>
+  
+This distribution looks as expected 
+```{r}
+ggplot(records) + geom_bar(aes(workclass)) + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+**Univariate Distribution Interesting Findings:** <br>
+Most people drop out of highschool their freshman and sophomore years. Also, most people that do graduate from highschool do end up continuing their education. <br>
+<br>
+It appears that households only fill out one census form. And not only do they only fill out one form, but it is primarily done by the males in the household. <br>
+This is evident in the relationship variable and sex variable. In relationship, recording 'husband' is nearly 4 times as common as 'wife'. Within the variable sex, there are nearly 2 times as many men as women. This can't be representative of the entire united states because we know the estimated proportion is 51% females to 49% males,.
+
+
+
+
+
+
+
+
+
