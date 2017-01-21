@@ -1,0 +1,10 @@
+Select * 
+FROM records
+JOIN countries ON records.country_id = countries.id
+JOIN education_levels ON records.education_level_id = education_levels.id
+JOIN marital_statuses ON records.marital_status_id = marital_statuses.id
+JOIN occupations ON records.occupation_id = occupations.id
+JOIN races ON records.race_id = races.id
+JOIN relationships ON records.relationship_id = relationships.id
+JOIN sexes ON records.sex_id = sexes.id
+JOIN workclasses ON records.workclass_id = workclasses.id
