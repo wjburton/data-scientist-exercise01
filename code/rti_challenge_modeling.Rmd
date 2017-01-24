@@ -5,7 +5,7 @@ output: html_notebook
 
 ###Step 4: Variable Associations With The Response <br>
 
-```{r}
+```{r, echo = F}
 
 #'Create bins containing equal sample sizes spread across a variable
 #'@description Create bins containing equal sample sizes. If the density is not
@@ -92,14 +92,14 @@ plot_continuous <- function(variable, n = 30, response, out = F,
             geom_line(aes(x = df$variable, y = df$pred_log_odds))+
             geom_jitter(aes(x = df$variable, y = df$plot_point),
                            color = 'blue', alpha = .05, height = jitter_height, width = 0) +
-            xlab(variable_name) + ylab('log odds of being a warm prospect'))
+            xlab(variable_name) + ylab('log odds of making over 50k'))
   } else{
     df$plot_point <- ifelse(df$response == 1,max(df$pred_prob) + 0.15, min(df$pred_prob) - 0.15 )
     print(ggplot()+ geom_point(aes(x = association_tbl$point, y = association_tbl$prob_warm)) +
             geom_line(aes(x = df$variable, y = df$pred_prob))+
             geom_jitter(aes(x = df$variable, y = df$plot_point),
                         color = 'blue', alpha = .05, height = jitter_height, width = 0) +
-            xlab(variable_name) + ylab('probability of being a warm prospect'))
+            xlab(variable_name) + ylab('probability ofof making over 50k'))
   }
 
   if(out == T){
@@ -136,59 +136,96 @@ train %>%
 
 ```
 
-```{r}
-plot_continuous(train$age, n = 300, response = train$over_50k, max_poly_degree = 3, log_odds = F, jitter_height = .025)
-```
 
+
+**Age** <br>
+Relationship between the log odds of making over 50k and Age is not linear. The trend between age and and making over 50k is clearly defined.
+```{r}
+plot_continuous(train$age, n = 300, response = train$over_50k, max_poly_degree = 1, log_odds = T, jitter_height = .025, variable_name = 'Age')
+```
+<br>
+**Age** <br>
+Here a third order polynomial of age is used to model whether a person is making over 50k or not
+
+```{r}
+plot_continuous(train$age, n = 300, response = train$over_50k, max_poly_degree = 3, log_odds = T, jitter_height = .025, variable_name = 'Age')
+```
+<br>
+<br>
+
+**education_num** <br>
+The association between the log odds between making over 50k and education number appears to be linear, With the exception of the lower education levels.
 ```{r}
 plot_continuous(train$education_num, n = 100, response = train$over_50k, max_poly_degree = 1, log_odds = T)
 ```
-
-Combine education numbers less than highschool grad into one level.
-This association is approximately linear. I don't see a need to estimate a coefficient for each level.
-```{r}
+<br>
+<br>
+**education_num** <br> 
+With the exception of the lower education levels, there is an approximately linear relationship. To adjust for the lower education numbers, all values below 8 are combined into a single category. Now the line has a much better fit.
+```{r, eho = F}
 train %>% 
   mutate(education_num = ifelse(education_num < 8, 7, education_num)) -> train2
 plot_continuous(train2$education_num, n = 100, response = train2$over_50k, max_poly_degree = 1, log_odds = T)
 ```
 <br>
 
-This variable has an outlier at 99,999 that is causing some problems. Lets log scale the variable and filter
-so we are just looking at values > 0.
+**capital_gain** <br>
+This variable has an outlier at 99,999 that is causing some problems.
 ```{r}
 plot_continuous(train$capital_gain , n = 100, response = train$over_50k, max_poly_degree = 1, log_odds = T)
 ```
+<br>
 
-
-
-Great looking separation here
-```{r}
+**capital_gain** <br>
+In this plot, capital gain is log scaled and the variable is filtered so we are just looking at capital_gain values > 0. 
+The y-axis is in a probability form instead of log-odds.  It looks like there is great separation between capital gain and over_50k here.
+```{r, echo = F}
 train %>% 
   filter(capital_gain > 0) -> train2
-plot_continuous(log(train2$capital_gain + 1), n = 100, response = train2$over_50k, max_poly_degree = 1, log_odds = F)
+plot_continuous(log(train2$capital_gain + 1), n = 100, response = train2$over_50k, max_poly_degree = 1, log_odds = F,
+                variable_name = 'capital_gain')
+```
+<br>
+
+**capital_gain** <br>
+We can see here that the capital gain distribution after 0 has near perfect separation between the response.
+```{r, echo = F}
+train %>% 
+  filter(capital_gain > 0) -> train2
+plot_density(log(train2$capital_gain + 1), response = train2$over_50k, variable_name = 'capital_gain')
 ```
 
 
-Same data as above, this time looking at the difference in density distributions
+**capital_loss** <br>
+There appears to be a week relationship between capital_loss and the reponse
 ```{r}
-train %>% 
-  filter(capital_gain > 0) -> train2
-plot_density(log(train2$capital_gain + 1), response = train2$over_50k)
+plot_continuous(train$capital_loss, n = 30, response = train$over_50k, max_poly_degree = 1, log_odds = T, variable_name = 'capital_loss')
 ```
 
-
-Lets take at a look at the association filtering the values equal to 0
+**capital_loss** <br>
+It looks like the important distinction between this variable is that at 0, it is more likely to make less than 50k. Greater than 0 it is more likely to make 50k. Next I'll filter out the zeros so I can better see the middle distribtion
 ```{r}
-plot_continuous(train$capital_loss + 1, n = 30, response = train$over_50k, max_poly_degree = 1, log_odds = T)
 plot_density(train$capital_loss, response = train$over_50k)
 ```
+
+
+**capital_loss** <br>
+After filtering out the zeros, There really is not much separation here.  Instead I'll convert this variable to be categorical. 0 if equal to 0, and 1 if greater than 0
 ```{r}
 train %>% 
   filter(capital_loss > 0) -> train2
-plot_continuous(log(train2$capital_loss + 1), n = 30, response = train2$over_50k, max_poly_degree = 1, log_odds = F)
-```
-
-Theres really not much separation here.  Instead I'll convert this variable to be categorical. 0 if equal to 0, and 1 if greater than 0
-```{r}
 plot_density(log(train2$capital_loss + 1), response = train2$over_50k)
 ```
+
+
+**hours_week**
+```{r}
+plot_continuous(train$hours_week, n = 200, response = train$over_50k, max_poly_degree = 4, log_odds = T, variable_name = 'hours_week')
+
+```
+
+
+
+
+
+
