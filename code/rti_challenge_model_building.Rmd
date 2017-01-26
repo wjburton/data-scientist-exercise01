@@ -3,15 +3,121 @@ title: "RTI Data Science Exercise"
 output: html_notebook
 ---
 
-#Step 1. Tranform the variables as discovered necessary when looking at the associations
-between the variables and teh response
-```{r}
+###Modeling Step 1. Read in data and transform the variables. <br>
+The transformations are done based on discoveries by looking at variable associations with the response 
 
+```{r, echo = F}
 transform_variables <- function(data){
   
+  data %>% 
+    mutate(education_num = ifelse(education_num < 8, 7, education_num),
+           capital_gain = log(capital_gain + 1),
+           capital_gain_ind = ifelse(capital_gain == 0,1,0),
+           capital_loss_ind = ifelse(capital_loss == 0, 0, 1),
+           hours_week_ind = ifelse(hours_week >= 50, 1,0),
+           workclass = ifelse(is.na(workclass), 'missing', as.character(workclass)),
+           occupation = ifelse(is.na(occupation), 'missing', as.character(occupation)),
+           marital_status = ifelse(marital_status %in% c('Married-AF-spouse', 'Married-civ-spouse'), 1,0),
+           relationship = ifelse(relationship %in% c('Husband', 'Wife'), ('rel_a'),
+                                 ifelse(relationship %in% c('Unmarried', 'Not-in-family'),
+                                        ('rel_b'), ('rel_c')))) %>% 
+    group_by(country) %>% 
+    mutate(pct_over_50k = sum(as.numeric(as.character(over_50k)))/n()) %>% 
+    mutate(country_group = cut(pct_over_50k, seq(0,.46, by = .051), labels = letters[1:9])) %>%  
+    ungroup() %>% 
+    mutate_each(funs(factor(.)), -c(age:hours_week, capital_gain_ind, hours_week_ind))-> transformed_data
   
-  
+  return(transformed_data)
 }
+```
+
+
+```{r}
+#read in data
+library(tidyverse)
+raw <- read_csv('C:/Users/Will/Documents/MSA/jobs/rti_challenge/data-scientist-exercise01/data/train.csv')
+
+#transform / create indicator variables based on exploring variable associations with the response.
+train <- transform_variables(raw)
+```
+
+###Step 2: Modeling
+<br>
+<br>
+
+***
+***
+
+**Random Forest** <br>
+I'll start out with a random forest model so I can get an idea of variable importance on which variables
+to include in the logistic regression model. With the random forest I don't pass it any transformed variables, I give it the raw dataset.
+```{r}
+
+library(randomForest)
+forest <- randomForest(over_50k ~ . , data = raw)
+
 
 
 ```
+
+
+
+
+***
+***
+
+**Logistic regression modeling based on learning variable associations.**
+  
+* poly(age,3)
+* education_num
+* capital_gain + capital_gain_ind + I(capital_gain*capital_gain_ind)
+* capital_loss
+* poly(hours_week,3) + hours_week_ind + I(hours_week_ind * hours_week)
+* country_group
+* marital_status | relationship
+* occupation | workclass
+<br>
+<br>
+I will try race out in the model but I would hope the variation explained by race should be explained better by underlying factors such as education, age, hours worked, and work class.
+
+
+
+```{r}
+
+country_group + 
+                                    marital_status + relationship + 
+                                    occupation + workclass + 
+                                    sex + 
+                                    race
+
+
+#define full logistic model
+full_logistic_mod <- glm(over_50k ~ poly(age,3) +
+                                    education_num + 
+                                    capital_gain + capital_gain_ind + I(capital_gain*capital_gain_ind) +
+                                    capital_loss_ind +
+                                    poly(hours_week,3) + hours_week_ind + I(hours_week_ind * hours_week) , data = train, family = binomial)
+
+
+#define empty model
+nothing <- glm(over_50k ~ 1,data = train, family = binomial)
+
+
+#preform backwards, forwards, and stepwise selection, while optimizing AIC
+backwards <-step(full_logistic_mod, trace = 0) # Backwards selection is the default
+
+forwards <- step(nothing,
+                 scope=list(lower=formula(nothing),upper=formula(full_logistic_mod)), direction="forward", trace = 0)
+
+stepwise <- step(nothing, list(lower=formula(nothing),upper=formula(full_logistic_mod)),
+                 direction="both",trace=0)
+```
+
+
+
+
+
+
+
+
+
