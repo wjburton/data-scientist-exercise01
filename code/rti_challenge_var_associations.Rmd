@@ -1,0 +1,435 @@
+---
+title: "RTI Data Science Exercise"
+output: html_notebook
+---
+
+###Step 4: Variable Associations With The Response <br>
+
+```{r, echo = F}
+
+#'Create bins containing equal sample sizes spread across a variable
+#'@description Create bins containing equal sample sizes. If the density is not
+#'uniform then generic cuts in the data will not produce equal sample sizes among
+#'the cuts.
+#'@param variable  Variable of interest
+#'@param n  The sample size for each bin
+create_equal_bins <- function(variable, n){
+  place <- 1:length(variable)
+  n_bins <- ceiling(length(variable)/n)
+  binned_var <- rep(1:n_bins,n) %>% sort %>% .[1:length(variable)]
+  data.frame(place, variable) %>%
+    arrange(variable) %>%
+    mutate(binned_var = binned_var) %>%
+    group_by(binned_var) %>%
+    mutate(point = median(variable)) %>%
+    ungroup() %>%
+    arrange(place) -> out
+  return(out)
+}
+
+
+
+#`Visualize the relationship between a variable and the response
+#' @description plot the variable against the rolling percent of warm leads
+#' @param variable Variable of interest
+#' @param response Binary response variable
+#' @param roll_n  rolling window on which to calculate the percent
+#' @param variable_name independent variable
+#' @return A visualization of the association between the variable and the response
+#' @export
+plot_rolling_mean <- function(variable, response, roll_n = 50, variable_name = 'variable'){
+  data.frame(variable, response) %>%
+    arrange(variable) %>%
+    mutate(roll_pct_warm = zoo::rollmean(response, k = roll_n,
+                                         align = 'center', fill = NA)) -> plot_roll_mean
+    print(ggplot(plot_roll_mean, aes(x = variable, y = roll_pct_warm)) + geom_line() +
+            xlab(variable_name))
+
+}
+
+
+#'Plot a continuous variable against a binary response
+#'@description Plot a continuous variable against a binary response by
+#'binning the variables and looking at the proportion of of the response in each bin
+#'@param variable  A binned version of the continuous variable
+#'@param n The number of datapoints for each condensed point
+#'@param response Binary response variable
+#'@param out Output the data used to create the plot or not. Accepts values of TRUE or FALSE
+#'@param max_term The name of the independent variable, will become the x-axis title
+#'@param max_poly_degree The highest degree of polynomial to use for modeling
+#'@param variable_name Name of the variable, Will be the title of the x-axis
+#'@param jitter_height The random jitter of the actual points. the default may be too large or small
+#'@param log_odds Should the y-axis be in terms of log odds or probability. T = log odds, F = Probability
+#'@export
+plot_continuous <- function(variable, n = 30, response, out = F,
+                            max_poly_degree = 1, variable_name = 'variable',
+                            jitter_height = 0.1, log_odds = T){
+
+  df <- create_equal_bins(variable, n)
+  df <- data.frame(df, response) %>% na.omit()
+  df %>%
+  group_by(point) %>%
+  summarise(prob_warm = sum(response)/n(),
+            n = n()) %>%
+  mutate(odds = prob_warm/(1-prob_warm)) %>%
+  mutate(log_odds = log(odds)) -> association_tbl
+
+  log_mod <- glm(response ~ poly(variable,max_poly_degree) ,data = df, family = "binomial")
+  probs <- predict(log_mod , type = 'response')
+  df$pred_prob <- probs
+  df$pred_log_odds <- log(probs/(1-probs))
+
+  max_log_odds <- max(association_tbl$log_odds[!is.infinite(association_tbl$log_odds)])
+  min_log_odds <- min(association_tbl$log_odds[!is.infinite(association_tbl$log_odds)])
+  add <- max(abs(association_tbl$log_odds[!is.infinite(association_tbl$log_odds)]))
+
+
+  if(log_odds == T){
+    df$plot_point <- ifelse(df$response == 1, max_log_odds + .1*add,
+                            min_log_odds - .1*add)
+
+    print(ggplot()+ geom_point(aes(x = association_tbl$point, y = association_tbl$log_odds)) +
+            geom_line(aes(x = df$variable, y = df$pred_log_odds))+
+            geom_jitter(aes(x = df$variable, y = df$plot_point),
+                           color = 'blue', alpha = .05, height = jitter_height, width = 0) +
+            xlab(variable_name) + ylab('log odds of making over 50k'))
+  } else{
+    df$plot_point <- ifelse(df$response == 1,max(df$pred_prob) + 0.15, min(df$pred_prob) - 0.15 )
+    print(ggplot()+ geom_point(aes(x = association_tbl$point, y = association_tbl$prob_warm)) +
+            geom_line(aes(x = df$variable, y = df$pred_prob))+
+            geom_jitter(aes(x = df$variable, y = df$plot_point),
+                        color = 'blue', alpha = .05, height = jitter_height, width = 0) +
+            xlab(variable_name) + ylab('probability of making over 50k'))
+  }
+
+  if(out == T){
+    return(list('points' = association_tbl, 'line' = df))
+  }
+}
+
+
+
+#' Plot overlaying density plots of the variable against the response
+#' @description Identify separation created by the independent variable on the response
+#' @param variable independent variable
+#' @param response response variable
+#' @param variable_name name of independent variable or x-axis title
+#' @export
+plot_density <- function(variable, response, variable_name = 'variable'){
+    data.frame(variable, response) %>%
+    mutate(response = factor(response)) %>%
+    rename(over_50k = response) -> density_plot
+
+    print(ggplot(density_plot, aes(x = variable, fill = over_50k)) + geom_density(alpha = 0.2)+
+      xlab(variable_name) + scale_fill_manual(values=c("blue", "red")))
+}
+```
+
+
+```{r}
+library(tidyverse)
+train <- read_csv('C:/Users/Will/Documents/MSA/jobs/rti_challenge/data-scientist-exercise01/data/train.csv')
+
+train %>%
+  mutate_each(funs(factor(.)), -c(age:hours_week)) %>% 
+  mutate(over_50k = as.numeric(as.character(over_50k))) -> train
+
+```
+<br>
+<br>
+
+***
+
+**Age** <br>
+Relationship between the log odds of making over 50k and Age is not linear. The trend between age and and making over 50k is clearly defined.
+```{r}
+plot_continuous(train$age, n = 300, response = train$over_50k, max_poly_degree = 1, log_odds = T, jitter_height = .025, variable_name = 'Age')
+```
+<br>
+**Age** <br>
+Here a third order polynomial of age is used to model whether a person is making over 50k or not. The max values of age may be mistakes in the data. I'd  want to research these points on the job but for times sake I'll leave them as is for now.
+
+```{r}
+plot_continuous(train$age, n = 300, response = train$over_50k, max_poly_degree = 3, log_odds = T, jitter_height = .025, variable_name = 'Age')
+```
+
+***
+
+<br>
+<br>
+
+***
+
+**education_num** <br>
+The association between the log odds between making over 50k and education number appears to be linear, With the exception of the lower education levels.
+```{r}
+plot_continuous(train$education_num, n = 100, response = train$over_50k, max_poly_degree = 1, log_odds = T)
+```
+<br>
+<br>
+**education_num** <br> 
+With the exception of the lower education levels, there is an approximately linear relationship. To adjust for the lower education numbers, all values below 8 are combined into a single category. Now the line has a much better fit.
+```{r, eho = F}
+train %>% 
+  mutate(education_num = ifelse(education_num < 8, 7, education_num)) -> train2
+plot_continuous(train2$education_num, n = 100, response = train2$over_50k, max_poly_degree = 1, log_odds = T)
+```
+
+***
+
+<br>
+<br>
+
+***
+
+**capital_gain** <br>
+This variable has an outlier at 99,999 that is causing some problems.
+```{r}
+plot_continuous(train$capital_gain , n = 100, response = train$over_50k, max_poly_degree = 1, log_odds = T)
+```
+<br>
+
+**capital_gain** <br>
+In this plot, capital gain is log scaled and the variable is filtered so we are just looking at capital_gain values > 0. 
+The y-axis is in a probability form instead of log-odds.  It looks like there is great separation between capital gain and over_50k here.
+```{r}
+train %>% 
+  filter(capital_gain > 0) -> train2
+plot_continuous(log(train2$capital_gain + 1), n = 100, response = train2$over_50k, max_poly_degree = 1, log_odds = F,
+                variable_name = 'capital_gain')
+```
+<br>
+
+**capital_gain** <br>
+We can see here that the capital gain distribution after 0 has near perfect separation between the response.
+```{r}
+train %>% 
+  filter(capital_gain > 0) -> train2
+plot_density(log(train2$capital_gain + 1), response = train2$over_50k, variable_name = 'capital_gain')
+```
+
+***
+
+<br>
+<br>
+
+***
+
+**capital_loss** <br>
+There appears to be a week relationship between capital_loss and the reponse
+```{r}
+plot_continuous(train$capital_loss, n = 30, response = train$over_50k, max_poly_degree = 1, log_odds = T, variable_name = 'capital_loss')
+```
+<br>
+<br>
+
+
+**capital_loss** <br>
+It looks like the important distinction between this variable is that at 0, it is more likely to make less than 50k. Greater than 0 it is more likely to make 50k. Next I'll filter out the zeros so I can better see the middle distribtion. To model this in the final logistic regression model I'll need to create a binary variablesignifying > 0 and make add an interaction term.
+```{r}
+plot_density(train$capital_loss, response = train$over_50k)
+```
+
+***
+
+<br>
+<br>
+
+***
+
+**capital_loss** <br>
+After filtering out the zeros, There really is not much separation here.  Instead I'll convert this variable to be categorical. 0 if equal to 0, and 1 if greater than 0
+```{r}
+train %>% 
+  filter(capital_loss > 0) -> train2
+plot_density(log(train2$capital_loss + 1), response = train2$over_50k)
+```
+
+***
+
+<br>
+<br>
+
+***
+
+**hours_week** <br>
+The log odds here are not linear at all. It looks like a 3rd order polynomial may fit the trend much better. The data also appears to have the same association with the response after 50 hours a week.
+```{r}
+plot_continuous(train$hours_week, n = 30, response = train$over_50k, max_poly_degree = 1, log_odds = T, variable_name = 'hours_week')
+```
+
+***
+
+<br>
+<br>
+
+***
+
+**hours_week** <br>
+The best way to fit the data I've found is to bring every value over 50 hours a week to 50 hours a week (since the association doesn't change after that point), And create an indicator variable to identify which were greater than 50. Then model the data with a 2nd order polynomial.
+```{r}
+train %>%
+  mutate(hours_week1 = ifelse(hours_week >= 50, 50, hours_week),
+         hours_indicator = ifelse(hours_week >= 50, 1,0)) ->  train2
+
+plot_continuous(train2$hours_week1,  n = 100, response = train2$over_50k, max_poly_degree = 3, log_odds = T, variable_name = 'hours_week')
+```
+
+***
+
+<br>
+<br>
+
+***
+
+**country**<br>
+This plot shows the proportion of individuals over 50k for each country. There is a significant difference in likelihood of earning over 50k between these countries.   The difference in line color shows the sample size. The darker the color the larger the sample for that country.
+```{r}
+
+country_labels <- letters[1:9]
+train %>% 
+  group_by(country) %>% 
+  summarise(pct_over_50k = sum(over_50k)/n(),
+            n = n()) %>% 
+  arrange(pct_over_50k) %>%
+  mutate(country = ifelse(is.na(country), 'missing', as.character(country))) %>% 
+  mutate(country = factor(country, levels = unique(country)))-> train2
+
+
+
+ggplot(train2, aes(country, pct_over_50k)) + geom_bar(aes(alpha = log(n)),stat = 'identity') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+<br>
+
+**country** <br>
+Instead of estimating 41 coefficients (one for each level within country) the countries are broken into groups based on their proportion of making over 50k.
+```{r}
+train2 %>%  
+  mutate(country_group = cut(pct_over_50k,
+                             seq(0,.46, by = .051),
+                             labels = letters[1:9])) %>% 
+  select(country, country_group, pct_over_50k)-> train2
+
+ggplot(train2, aes(country, pct_over_50k)) + geom_bar(stat = 'identity', aes(fill = country_group)) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+***
+
+<br>
+<br>
+
+***
+
+
+**marital status** <br>
+It looks as if Married-AF and Marries-civ could be combined into one group, and the remaining variables into another group
+```{r}
+
+train %>% 
+  group_by(marital_status) %>% 
+  summarise(pct_over_50k = sum(over_50k)/n(),
+            n = n()) %>% 
+  arrange(pct_over_50k) %>%
+  mutate(marital_status = factor(marital_status,
+                                 levels = unique(marital_status)))-> train2
+
+
+
+ggplot(train2, aes(marital_status, pct_over_50k)) + geom_bar(aes(alpha = log(n)),stat = 'identity') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+***
+
+<br>
+<br>
+
+***
+
+**occupation** <br>
+This variable makes sense, with the executives and professional having the highest proportion of over 50k, and farming/fishing and hadlers-cleaners having a low proportion
+```{r}
+
+train %>% 
+  group_by(occupation) %>% 
+  summarise(pct_over_50k = sum(over_50k)/n(),
+            n = n()) %>% 
+  arrange(pct_over_50k) %>%
+  mutate(occupation = factor(occupation,
+                                 levels = unique(occupation)))-> train2
+
+ggplot(train2, aes(occupation, pct_over_50k)) + geom_bar(aes(alpha = log(n)),stat = 'identity') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+***
+
+<br>
+<br>
+
+***
+
+**race**
+```{r}
+
+train %>% 
+  group_by(race) %>% 
+  summarise(pct_over_50k = sum(over_50k)/n(),
+            n = n()) %>% 
+  arrange(pct_over_50k) %>%
+  mutate(race = factor(race, levels = unique(race)))-> train2
+
+ggplot(train2, aes(race, pct_over_50k)) + geom_bar(aes(alpha = log(n)),stat = 'identity') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+***
+
+<br>
+<br>
+
+***
+
+**relationship** <br>
+This variable follows closely with marital status. Only one may be useful to use.
+```{r}
+
+train %>% 
+  group_by(relationship) %>% 
+  summarise(pct_over_50k = sum(over_50k)/n(),
+            n = n()) %>% 
+  arrange(pct_over_50k) %>%
+  mutate(relationship = factor(relationship, levels = unique(relationship)))-> train2
+
+ggplot(train2, aes(relationship, pct_over_50k)) + geom_bar(aes(alpha = log(n)),stat = 'identity') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+***
+
+<br>
+<br>
+
+***
+
+**workclass** <br>
+this variable and occupation likely provide similar information to modeling. Only one may be useful.
+```{r}
+
+train %>% 
+  group_by(workclass) %>% 
+  summarise(pct_over_50k = sum(over_50k)/n(),
+            n = n()) %>% 
+  arrange(pct_over_50k) %>%
+  mutate(workclass = factor(workclass, levels = unique(workclass)))-> train2
+
+ggplot(train2, aes(workclass, pct_over_50k)) + geom_bar(aes(alpha = log(n)),stat = 'identity') + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+
+***
+
