@@ -172,24 +172,95 @@ $(document).ready(function () {
 
 
 <!-- rnb-text-begin -->
-<div id="step-1.-tranform-the-variables-as-discovered-necessary-when-looking-at-the-associations" class="section level1">
-<h1>Step 1. Tranform the variables as discovered necessary when looking at the associations</h1>
-<p>between the variables and teh response</p>
+<div id="modeling-step-1.-read-in-data-and-transform-the-variables." class="section level3">
+<h3>Modeling Step 1. Read in data and transform the variables. <br></h3>
+<p>The transformations are done based on discoveries by looking at variable associations with the response</p>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuXG50cmFuc2Zvcm1fdmFyaWFibGVzIDwtIGZ1bmN0aW9uKGRhdGEpe1xuICBcbiAgXG4gIFxufVxuXG5cbmBgYCJ9 -->
-<pre class="r"><code>
-transform_variables &lt;- function(data){
-  
-  
-  
-}
-</code></pre>
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuI3JlYWQgaW4gZGF0YVxubGlicmFyeSh0aWR5dmVyc2UpXG5yYXcgPC0gcmVhZF9jc3YoJ0M6L1VzZXJzL1dpbGwvRG9jdW1lbnRzL01TQS9qb2JzL3J0aV9jaGFsbGVuZ2UvZGF0YS1zY2llbnRpc3QtZXhlcmNpc2UwMS9kYXRhL3RyYWluLmNzdicpXG5cbiN0cmFuc2Zvcm0gLyBjcmVhdGUgaW5kaWNhdG9yIHZhcmlhYmxlcyBiYXNlZCBvbiBleHBsb3JpbmcgdmFyaWFibGUgYXNzb2NpYXRpb25zIHdpdGggdGhlIHJlc3BvbnNlLlxudHJhaW4gPC0gdHJhbnNmb3JtX3ZhcmlhYmxlcyhyYXcpXG5gYGAifQ== -->
+<pre class="r"><code>#read in data
+library(tidyverse)
+raw &lt;- read_csv('C:/Users/Will/Documents/MSA/jobs/rti_challenge/data-scientist-exercise01/data/train.csv')
+
+#transform / create indicator variables based on exploring variable associations with the response.
+train &lt;- transform_variables(raw)</code></pre>
 <!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+</div>
+<div id="step-2-modeling" class="section level3">
+<h3>Step 2: Modeling</h3>
+<p><br> <br></p>
+<hr />
+<hr />
+<p><strong>Random Forest</strong> <br> I’ll start out with a random forest model so I can get an idea of variable importance on which variables to include in the logistic regression model. With the random forest I don’t pass it any transformed variables, I give it the raw dataset.</p>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZm9yZXN0IDwtIHJhbmRvbUZvcmVzdChvdmVyXzUwayB+IC4gLCBkYXRhID0gcmF3KVxuXG5gYGAifQ== -->
+<pre class="r"><code>forest &lt;- randomForest(over_50k ~ . , data = raw)
+</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiRXJyb3IgaW4gbmEuZmFpbC5kZWZhdWx0KGxpc3Qob3Zlcl81MGsgPSBjKDBMLCAwTCwgMEwsIDBMLCAxTCwgMUwsIDFMLCAgOiBcbiAgbWlzc2luZyB2YWx1ZXMgaW4gb2JqZWN0XG4ifQ== -->
+<pre><code>Error in na.fail.default(list(over_50k = c(0L, 0L, 0L, 0L, 1L, 1L, 1L,  : 
+  missing values in object</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<hr />
+<hr />
+<p><strong>Logistic regression modeling based on learning variable associations.</strong></p>
+<ul>
+<li>poly(age,3)</li>
+<li>education_num</li>
+<li>capital_gain + capital_gain_ind + I(capital_gain*capital_gain_ind)</li>
+<li>capital_loss</li>
+<li>poly(hours_week,3) + hours_week_ind + I(hours_week_ind * hours_week)</li>
+<li>country_group</li>
+<li>marital_status | relationship</li>
+<li>occupation | workclass <br> <br> I will try race out in the model but I would hope the variation explained by race should be explained better by underlying factors such as education, age, hours worked, and work class.</li>
+</ul>
+<!-- rnb-text-end -->
+<!-- rnb-chunk-begin -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuXG5jb3VudHJ5X2dyb3VwICsgXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBtYXJpdGFsX3N0YXR1cyArIHJlbGF0aW9uc2hpcCArIFxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgb2NjdXBhdGlvbiArIHdvcmtjbGFzcyArIFxuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgc2V4ICsgXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICByYWNlXG5cblxuI2RlZmluZSBmdWxsIGxvZ2lzdGljIG1vZGVsXG5mdWxsX2xvZ2lzdGljX21vZCA8LSBnbG0ob3Zlcl81MGsgfiBwb2x5KGFnZSwzKSArXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBlZHVjYXRpb25fbnVtICsgXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBjYXBpdGFsX2dhaW4gKyBjYXBpdGFsX2dhaW5faW5kICsgSShjYXBpdGFsX2dhaW4qY2FwaXRhbF9nYWluX2luZCkgK1xuICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgY2FwaXRhbF9sb3NzX2luZCArXG4gICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBwb2x5KGhvdXJzX3dlZWssMykgKyBob3Vyc193ZWVrX2luZCArIEkoaG91cnNfd2Vla19pbmQgKiBob3Vyc193ZWVrKSAsIGRhdGEgPSB0cmFpbiwgZmFtaWx5ID0gYmlub21pYWwpXG5cblxuI2RlZmluZSBlbXB0eSBtb2RlbFxubm90aGluZyA8LSBnbG0ob3Zlcl81MGsgfiAxLGRhdGEgPSB0cmFpbiwgZmFtaWx5ID0gYmlub21pYWwpXG5cblxuI3ByZWZvcm0gYmFja3dhcmRzLCBmb3J3YXJkcywgYW5kIHN0ZXB3aXNlIHNlbGVjdGlvbiwgd2hpbGUgb3B0aW1pemluZyBBSUNcbmJhY2t3YXJkcyA8LXN0ZXAoZnVsbF9sb2dpc3RpY19tb2QsIHRyYWNlID0gMCkgIyBCYWNrd2FyZHMgc2VsZWN0aW9uIGlzIHRoZSBkZWZhdWx0XG5cbmZvcndhcmRzIDwtIHN0ZXAobm90aGluZyxcbiAgICAgICAgICAgICAgICAgc2NvcGU9bGlzdChsb3dlcj1mb3JtdWxhKG5vdGhpbmcpLHVwcGVyPWZvcm11bGEoZnVsbF9sb2dpc3RpY19tb2QpKSwgZGlyZWN0aW9uPVwiZm9yd2FyZFwiLCB0cmFjZSA9IDApXG5cbnN0ZXB3aXNlIDwtIHN0ZXAobm90aGluZywgbGlzdChsb3dlcj1mb3JtdWxhKG5vdGhpbmcpLHVwcGVyPWZvcm11bGEoZnVsbF9sb2dpc3RpY19tb2QpKSxcbiAgICAgICAgICAgICAgICAgZGlyZWN0aW9uPVwiYm90aFwiLHRyYWNlPTApXG5gYGAifQ== -->
+<pre class="r"><code>
+country_group + 
+                                    marital_status + relationship + 
+                                    occupation + workclass + 
+                                    sex + 
+                                    race
+
+
+#define full logistic model
+full_logistic_mod &lt;- glm(over_50k ~ poly(age,3) +
+                                    education_num + 
+                                    capital_gain + capital_gain_ind + I(capital_gain*capital_gain_ind) +
+                                    capital_loss_ind +
+                                    poly(hours_week,3) + hours_week_ind + I(hours_week_ind * hours_week) , data = train, family = binomial)
+
+
+#define empty model
+nothing &lt;- glm(over_50k ~ 1,data = train, family = binomial)
+
+
+#preform backwards, forwards, and stepwise selection, while optimizing AIC
+backwards &lt;-step(full_logistic_mod, trace = 0) # Backwards selection is the default
+
+forwards &lt;- step(nothing,
+                 scope=list(lower=formula(nothing),upper=formula(full_logistic_mod)), direction=&quot;forward&quot;, trace = 0)
+
+stepwise &lt;- step(nothing, list(lower=formula(nothing),upper=formula(full_logistic_mod)),
+                 direction=&quot;both&quot;,trace=0)</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-chunk-end -->
+<!-- rnb-text-begin -->
+<!-- rnb-text-end -->
 </div>
 
-<div id="rmd-source-code">LS0tDQp0aXRsZTogIlJUSSBEYXRhIFNjaWVuY2UgRXhlcmNpc2UiDQpvdXRwdXQ6IGh0bWxfbm90ZWJvb2sNCi0tLQ0KDQojU3RlcCAxLiBUcmFuZm9ybSB0aGUgdmFyaWFibGVzIGFzIGRpc2NvdmVyZWQgbmVjZXNzYXJ5IHdoZW4gbG9va2luZyBhdCB0aGUgYXNzb2NpYXRpb25zDQpiZXR3ZWVuIHRoZSB2YXJpYWJsZXMgYW5kIHRlaCByZXNwb25zZQ0KYGBge3J9DQoNCnRyYW5zZm9ybV92YXJpYWJsZXMgPC0gZnVuY3Rpb24oZGF0YSl7DQogIA0KICANCiAgDQp9DQoNCg0KYGBg</div>
+<div id="rmd-source-code">LS0tDQp0aXRsZTogIlJUSSBEYXRhIFNjaWVuY2UgRXhlcmNpc2UiDQpvdXRwdXQ6IGh0bWxfbm90ZWJvb2sNCi0tLQ0KDQojIyNNb2RlbGluZyBTdGVwIDEuIFJlYWQgaW4gZGF0YSBhbmQgdHJhbnNmb3JtIHRoZSB2YXJpYWJsZXMuIDxicj4NClRoZSB0cmFuc2Zvcm1hdGlvbnMgYXJlIGRvbmUgYmFzZWQgb24gZGlzY292ZXJpZXMgYnkgbG9va2luZyBhdCB2YXJpYWJsZSBhc3NvY2lhdGlvbnMgd2l0aCB0aGUgcmVzcG9uc2UgDQoNCmBgYHtyLCBlY2hvID0gRn0NCnRyYW5zZm9ybV92YXJpYWJsZXMgPC0gZnVuY3Rpb24oZGF0YSl7DQogIA0KICBkYXRhICU+JSANCiAgICBtdXRhdGUoZWR1Y2F0aW9uX251bSA9IGlmZWxzZShlZHVjYXRpb25fbnVtIDwgOCwgNywgZWR1Y2F0aW9uX251bSksDQogICAgICAgICAgIGNhcGl0YWxfZ2FpbiA9IGxvZyhjYXBpdGFsX2dhaW4gKyAxKSwNCiAgICAgICAgICAgY2FwaXRhbF9nYWluX2luZCA9IGlmZWxzZShjYXBpdGFsX2dhaW4gPT0gMCwxLDApLA0KICAgICAgICAgICBjYXBpdGFsX2xvc3NfaW5kID0gaWZlbHNlKGNhcGl0YWxfbG9zcyA9PSAwLCAwLCAxKSwNCiAgICAgICAgICAgaG91cnNfd2Vla19pbmQgPSBpZmVsc2UoaG91cnNfd2VlayA+PSA1MCwgMSwwKSwNCiAgICAgICAgICAgd29ya2NsYXNzID0gaWZlbHNlKGlzLm5hKHdvcmtjbGFzcyksICdtaXNzaW5nJywgYXMuY2hhcmFjdGVyKHdvcmtjbGFzcykpLA0KICAgICAgICAgICBvY2N1cGF0aW9uID0gaWZlbHNlKGlzLm5hKG9jY3VwYXRpb24pLCAnbWlzc2luZycsIGFzLmNoYXJhY3RlcihvY2N1cGF0aW9uKSksDQogICAgICAgICAgIG1hcml0YWxfc3RhdHVzID0gaWZlbHNlKG1hcml0YWxfc3RhdHVzICVpbiUgYygnTWFycmllZC1BRi1zcG91c2UnLCAnTWFycmllZC1jaXYtc3BvdXNlJyksIDEsMCksDQogICAgICAgICAgIHJlbGF0aW9uc2hpcCA9IGlmZWxzZShyZWxhdGlvbnNoaXAgJWluJSBjKCdIdXNiYW5kJywgJ1dpZmUnKSwgKCdyZWxfYScpLA0KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgaWZlbHNlKHJlbGF0aW9uc2hpcCAlaW4lIGMoJ1VubWFycmllZCcsICdOb3QtaW4tZmFtaWx5JyksDQogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgKCdyZWxfYicpLCAoJ3JlbF9jJykpKSkgJT4lIA0KICAgIGdyb3VwX2J5KGNvdW50cnkpICU+JSANCiAgICBtdXRhdGUocGN0X292ZXJfNTBrID0gc3VtKGFzLm51bWVyaWMoYXMuY2hhcmFjdGVyKG92ZXJfNTBrKSkpL24oKSkgJT4lIA0KICAgIG11dGF0ZShjb3VudHJ5X2dyb3VwID0gY3V0KHBjdF9vdmVyXzUwaywgc2VxKDAsLjQ2LCBieSA9IC4wNTEpLCBsYWJlbHMgPSBsZXR0ZXJzWzE6OV0pKSAlPiUgIA0KICAgIHVuZ3JvdXAoKSAlPiUgDQogICAgbXV0YXRlX2VhY2goZnVucyhmYWN0b3IoLikpLCAtYyhhZ2U6aG91cnNfd2VlaywgY2FwaXRhbF9nYWluX2luZCwgaG91cnNfd2Vla19pbmQpKS0+IHRyYW5zZm9ybWVkX2RhdGENCiAgDQogIHJldHVybih0cmFuc2Zvcm1lZF9kYXRhKQ0KfQ0KYGBgDQoNCg0KYGBge3J9DQojcmVhZCBpbiBkYXRhDQpsaWJyYXJ5KHRpZHl2ZXJzZSkNCnJhdyA8LSByZWFkX2NzdignQzovVXNlcnMvV2lsbC9Eb2N1bWVudHMvTVNBL2pvYnMvcnRpX2NoYWxsZW5nZS9kYXRhLXNjaWVudGlzdC1leGVyY2lzZTAxL2RhdGEvdHJhaW4uY3N2JykNCg0KI3RyYW5zZm9ybSAvIGNyZWF0ZSBpbmRpY2F0b3IgdmFyaWFibGVzIGJhc2VkIG9uIGV4cGxvcmluZyB2YXJpYWJsZSBhc3NvY2lhdGlvbnMgd2l0aCB0aGUgcmVzcG9uc2UuDQp0cmFpbiA8LSB0cmFuc2Zvcm1fdmFyaWFibGVzKHJhdykNCmBgYA0KDQojIyNTdGVwIDI6IE1vZGVsaW5nDQo8YnI+DQo8YnI+DQoNCioqKg0KKioqDQoNCioqUmFuZG9tIEZvcmVzdCoqIDxicj4NCkknbGwgc3RhcnQgb3V0IHdpdGggYSByYW5kb20gZm9yZXN0IG1vZGVsIHNvIEkgY2FuIGdldCBhbiBpZGVhIG9mIHZhcmlhYmxlIGltcG9ydGFuY2Ugb24gd2hpY2ggdmFyaWFibGVzDQp0byBpbmNsdWRlIGluIHRoZSBsb2dpc3RpYyByZWdyZXNzaW9uIG1vZGVsLiBXaXRoIHRoZSByYW5kb20gZm9yZXN0IEkgZG9uJ3QgcGFzcyBpdCBhbnkgdHJhbnNmb3JtZWQgdmFyaWFibGVzLCBJIGdpdmUgaXQgdGhlIHJhdyBkYXRhc2V0Lg0KYGBge3J9DQoNCmxpYnJhcnkocmFuZG9tRm9yZXN0KQ0KZm9yZXN0IDwtIHJhbmRvbUZvcmVzdChvdmVyXzUwayB+IC4gLCBkYXRhID0gcmF3KQ0KDQoNCg0KYGBgDQoNCg0KDQoNCioqKg0KKioqDQoNCioqTG9naXN0aWMgcmVncmVzc2lvbiBtb2RlbGluZyBiYXNlZCBvbiBsZWFybmluZyB2YXJpYWJsZSBhc3NvY2lhdGlvbnMuKioNCiAgDQoqIHBvbHkoYWdlLDMpDQoqIGVkdWNhdGlvbl9udW0NCiogY2FwaXRhbF9nYWluICsgY2FwaXRhbF9nYWluX2luZCArIEkoY2FwaXRhbF9nYWluKmNhcGl0YWxfZ2Fpbl9pbmQpDQoqIGNhcGl0YWxfbG9zcw0KKiBwb2x5KGhvdXJzX3dlZWssMykgKyBob3Vyc193ZWVrX2luZCArIEkoaG91cnNfd2Vla19pbmQgKiBob3Vyc193ZWVrKQ0KKiBjb3VudHJ5X2dyb3VwDQoqIG1hcml0YWxfc3RhdHVzIHwgcmVsYXRpb25zaGlwDQoqIG9jY3VwYXRpb24gfCB3b3JrY2xhc3MNCjxicj4NCjxicj4NCkkgd2lsbCB0cnkgcmFjZSBvdXQgaW4gdGhlIG1vZGVsIGJ1dCBJIHdvdWxkIGhvcGUgdGhlIHZhcmlhdGlvbiBleHBsYWluZWQgYnkgcmFjZSBzaG91bGQgYmUgZXhwbGFpbmVkIGJldHRlciBieSB1bmRlcmx5aW5nIGZhY3RvcnMgc3VjaCBhcyBlZHVjYXRpb24sIGFnZSwgaG91cnMgd29ya2VkLCBhbmQgd29yayBjbGFzcy4NCg0KDQoNCmBgYHtyfQ0KDQpjb3VudHJ5X2dyb3VwICsgDQogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBtYXJpdGFsX3N0YXR1cyArIHJlbGF0aW9uc2hpcCArIA0KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgb2NjdXBhdGlvbiArIHdvcmtjbGFzcyArIA0KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgc2V4ICsgDQogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICByYWNlDQoNCg0KI2RlZmluZSBmdWxsIGxvZ2lzdGljIG1vZGVsDQpmdWxsX2xvZ2lzdGljX21vZCA8LSBnbG0ob3Zlcl81MGsgfiBwb2x5KGFnZSwzKSArDQogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBlZHVjYXRpb25fbnVtICsgDQogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBjYXBpdGFsX2dhaW4gKyBjYXBpdGFsX2dhaW5faW5kICsgSShjYXBpdGFsX2dhaW4qY2FwaXRhbF9nYWluX2luZCkgKw0KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgY2FwaXRhbF9sb3NzX2luZCArDQogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBwb2x5KGhvdXJzX3dlZWssMykgKyBob3Vyc193ZWVrX2luZCArIEkoaG91cnNfd2Vla19pbmQgKiBob3Vyc193ZWVrKSAsIGRhdGEgPSB0cmFpbiwgZmFtaWx5ID0gYmlub21pYWwpDQoNCg0KI2RlZmluZSBlbXB0eSBtb2RlbA0Kbm90aGluZyA8LSBnbG0ob3Zlcl81MGsgfiAxLGRhdGEgPSB0cmFpbiwgZmFtaWx5ID0gYmlub21pYWwpDQoNCg0KI3ByZWZvcm0gYmFja3dhcmRzLCBmb3J3YXJkcywgYW5kIHN0ZXB3aXNlIHNlbGVjdGlvbiwgd2hpbGUgb3B0aW1pemluZyBBSUMNCmJhY2t3YXJkcyA8LXN0ZXAoZnVsbF9sb2dpc3RpY19tb2QsIHRyYWNlID0gMCkgIyBCYWNrd2FyZHMgc2VsZWN0aW9uIGlzIHRoZSBkZWZhdWx0DQoNCmZvcndhcmRzIDwtIHN0ZXAobm90aGluZywNCiAgICAgICAgICAgICAgICAgc2NvcGU9bGlzdChsb3dlcj1mb3JtdWxhKG5vdGhpbmcpLHVwcGVyPWZvcm11bGEoZnVsbF9sb2dpc3RpY19tb2QpKSwgZGlyZWN0aW9uPSJmb3J3YXJkIiwgdHJhY2UgPSAwKQ0KDQpzdGVwd2lzZSA8LSBzdGVwKG5vdGhpbmcsIGxpc3QobG93ZXI9Zm9ybXVsYShub3RoaW5nKSx1cHBlcj1mb3JtdWxhKGZ1bGxfbG9naXN0aWNfbW9kKSksDQogICAgICAgICAgICAgICAgIGRpcmVjdGlvbj0iYm90aCIsdHJhY2U9MCkNCmBgYA0KDQoNCg0KDQoNCg0KDQoNCg0K</div>
 
 
 
