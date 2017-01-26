@@ -1,0 +1,17 @@
+---
+title: "RTI Data Science Exercise"
+output: html_notebook
+---
+
+#Step 1. Tranform the variables as discovered necessary when looking at the associations
+between the variables and teh response
+```{r}
+
+transform_variables <- function(data){
+  
+  
+  
+}
+
+
+```
