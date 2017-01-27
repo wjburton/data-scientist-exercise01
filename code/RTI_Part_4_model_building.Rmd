@@ -1,0 +1,497 @@
+---
+title: "RTI Data Science Exercise Steps 5, 6, and 7"
+output: html_notebook
+---
+ <br>
+ <br>
+ 
+###Step 4. Variable Transformation and Creation <br>
+The transformations are done based on discoveries made by looking at variable associations with the response. <br>
+The code behind the functions 'transform_logistic' and 'transform_forest' can be found at the end of the page.
+
+```{r, echo = F}
+transform_logistic <- function(data){
+  
+  data %>% 
+    mutate(education_num = ifelse(education_num < 8, 7, education_num),
+           capital_gain = log(capital_gain + 1),
+           capital_gain_ind = ifelse(capital_gain == 0,1,0),
+           capital_loss_ind = ifelse(capital_loss == 0, 0, 1),
+           hours_week_ind = ifelse(hours_week >= 50, 1,0),
+           workclass = ifelse(is.na(workclass), 'missing', as.character(workclass)),
+           occupation = ifelse(is.na(occupation), 'missing', as.character(occupation)),
+           marital_status = ifelse(marital_status %in% c('Married-AF-spouse', 'Married-civ-spouse'), 1,0)) %>% 
+    group_by(country) %>% 
+    mutate(pct_over_50k = sum(as.numeric(as.character(over_50k)))/n()) %>% 
+    mutate(country_group = cut(pct_over_50k, seq(0,.46, by = .051), labels = letters[1:9])) %>%  
+    ungroup() %>% 
+    mutate_each(funs(factor(.)), -c(age:hours_week, capital_gain_ind, hours_week_ind)) %>% 
+    select(-split_number) -> transformed_data
+  
+  return(transformed_data)
+}
+
+
+transform_forest <- function(data){
+  data[is.na(data)] <- 'missing'
+  data %>% 
+    mutate_each(funs(as.factor(.)), -c(age:hours_week)) %>% 
+    select(-split_number, -education_num) -> data
+  
+  return(data)
+}
+```
+
+
+```{r, echo = F}
+#' Calculate the ROC curve for a given model
+#' @description This function calculates the roc curve and returns the data in a data frame
+#' @param model  model of interest
+#' @param response  response variable
+#' @param name  name of model
+#' @param probs predicted probabilities
+#' @export
+calculate_ROC <- function(model = NULL, response, name, probs = NULL){
+  df <- NULL
+  tp_rates <- NULL
+  fp_rates <- NULL
+  probs <- if(is.null(probs)){predict(model, type= 'response')} else{probs}
+  AUC <- as.numeric(pROC::auc(response, probs))
+  for(threshold in 0:200){
+    preds <- ifelse(probs >= (threshold/200), 1,0)
+    confusion_matrix <- caret::confusionMatrix(preds, response)$table
+    POS <- confusion_matrix[2,2]
+    NEG <- confusion_matrix[1,1]
+    FALPOS <- confusion_matrix[2,1]
+    FALNEG <- confusion_matrix[1,2]
+    tp_rate <- POS / (POS + FALNEG)
+    fp_rate <- FALPOS / (NEG + FALPOS)
+    tn_rate <- NEG / (NEG + FALPOS)
+    SPECIFICITY  <- tn_rate
+    SENSIT <- tp_rate
+    M1SPEC <- 1 - SPECIFICITY
+    df <- rbind(df, data.frame(name, AUC,'PROB' = threshold/200,
+                               POS, NEG, FALPOS, FALNEG, SENSIT,
+                               M1SPEC, youden_index = (SENSIT + SPECIFICITY - 1),
+                               accuracy = (POS + NEG)/(POS + NEG + FALPOS + FALNEG)))
+
+  }
+ 
+  return(df)
+}
+
+
+
+```
+
+
+***
+***
+
+**Logistic Regression Dataset, Variable Transformations** <br>
+
+* capital_gain :  scaled by a natural log <br>
+* marital_status :  1 for values of 'Married-AF-spouse', 'Married-civ-spouse', and 0 otherwise <br>
+* workclass : The NA values within workclass are given a separate category of 'missing' <br>
+* occupation : The NA values within occupation are given a separate category of 'missing' <br>
+
+<br>
+<br>
+**Logistic Regression Dataset, Variable Creation** <br>
+
+* capital_gain_ind : 0 if capital gain = 0, and 1 otherwise <br>
+* hours_week_ind : 1 if hours_week >= 50, and 0 otherwise <br>
+* capital_loss_ind : 0 for capital_loss = 0, and 1 otherwise <br>
+* country_group : a grouping of countries with similar probabilities of making over 50k <br>
+
+<br>
+<br>
+**Randon Forest Dataset, Variable Transformations** <br>
+
+* workclass : The NA values within workclass are given a separate category of 'missing' <br>
+* occupation : The NA values within occupation are given a separate category of 'missing' <br>
+
+
+```{r}
+#read in data
+library(tidyverse)
+raw_train <- read_csv('C:/Users/Will/Documents/MSA/jobs/rti_challenge/data-scientist-exercise01/data/train.csv')
+raw_valid <- read_csv('C:/Users/Will/Documents/MSA/jobs/rti_challenge/data-scientist-exercise01/data/valid.csv')
+raw_test <- read_csv('C:/Users/Will/Documents/MSA/jobs/rti_challenge/data-scientist-exercise01/data/test.csv')
+
+
+#transform the data
+train_logistic <- transform_logistic(raw_train)
+valid_logistic <- transform_logistic(raw_valid)
+test_logistic <- transform_logistic(raw_test)
+
+train_forest <- transform_forest(raw_train)
+valid_forest <- transform_forest(raw_valid) 
+test_forest <- transform_forest(raw_test) 
+```
+
+***
+***
+ 
+<br>
+<br>
+
+###Step 5:  Model Building <br>
+
+The code behind the function 'calculate_ROC' can be found at the end of the page.
+
+
+***
+***
+
+####**Random Forest** <br>
+I'll start out with a random forest model so I can get an idea of variable importance on each variable. This will also help me decide which variables to include in the logistic regression model. I didn't go into any parameter tuning when building this model.
+```{r}
+library(randomForest)
+
+#set random seed for reproducibility
+set.seed(40)
+
+#build Random orest Model
+forest <- randomForest(over_50k ~ . , data = train_forest)
+
+#plot variable importance
+varImpPlot(forest)
+```
+
+It was interesting to see that the variable 'relationship' had such a high mean decrease in gini. Because of this finding I didn't combine levels of the relationship variable when building the logistic regression model.
+ <br>
+ <br>
+ <br>
+ 
+####**Random Forest Evaluation** <br>
+
+The Random forest is evaluated by looking at the accuracy, AUC and ROC curve.
+```{r}
+
+#Calculate predicted probabilities on the validation data set
+forest_probs <- predict(forest,newdata = valid_forest, type = 'prob')[,2]
+
+#calculate ROC curve
+forest_roc <- calculate_ROC(probs = forest_probs, response = valid_forest$over_50k, name =  'Random Forest')
+
+#create table of summary stats
+summary_stats_forest <- data.frame(model = 'Random Forest',
+                            max_accuracy = max(forest_roc$accuracy),
+                            auc =  forest_roc$AUC[1])
+```
+
+```{r}
+print(summary_stats)
+```
+
+The Random Forest ROC curve give me an idea of the separation between the response values across an array  of cutoff thresholds
+<br>
+<br>
+```{r}
+ggplot(forest_roc, aes(x = M1SPEC, y = SENSIT)) + geom_line(aes(color = name), lwd = 1.3, alpha= 0.5) + 
+  geom_abline(slope = 1, intercept = 0) + xlim(0,1) + ylim(0,1) + ggtitle('Random Forest ROC Curve') + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+***
+***
+
+####**Logistic Regression** <br>
+The following model inputs were decided upon while examining the variable associations with the response.
+  
+* poly(age,3) <br>
+* education_num <br>
+* capital_gain + capital_gain_ind <br>
+* capital_loss_ind <br>
+* poly(hours_week,3) + hours_week_ind + I(hours_week_ind * hours_week) <br>
+* country_group <br>
+* marital_status | relationship <br>
+* occupation | workclass <br>
+
+<br>
+I will also include race and gender in the model but I would hope the variation explained by both of these variables should be explained better by underlying factors such as education, age, hours worked, and work class.
+<br>
+<br>
+
+To begin modeling I run all the variables, including the interaction and polynomial terms, through a forward, backward, and stepwise selection model.
+```{r}
+#define full logistic model
+full_logistic_mod <- glm(over_50k ~ poly(age,3) +
+                                    education_num + 
+                                    capital_gain + capital_gain_ind +
+                                    capital_loss_ind +
+                                    poly(hours_week,3) + hours_week_ind + I(hours_week_ind * hours_week) + 
+                                    relationship + 
+                                    marital_status + 
+                                    occupation + country_group + sex + race, data = train_logistic, family = binomial)
+
+
+#define empty model
+nothing <- glm(over_50k ~ 1,data = train_logistic, family = binomial)
+
+
+#preform backwards, forwards, and stepwise selection, while optimizing AIC
+backwards <-step(full_logistic_mod, trace = 0) # Backwards selection is the default
+
+forwards <- step(nothing,
+                 scope=list(lower=formula(nothing),upper=formula(full_logistic_mod)), direction="forward", trace = 0)
+
+stepwise <- step(nothing, list(lower=formula(nothing),upper=formula(full_logistic_mod)),
+                 direction="both",trace=0)
+
+```
+<br>
+
+Based on variable selection results, I chose to look further into 3 potential models : <br>
+
+* **Model 1** contains all the variables from the selected model of the forwards selection technique <br>
+* **Model 2** takes the inputs of Model 1 except it drops sex, country, marital_status, and race, and adds back in the hours_week indicator and the hours_week interaction <br>
+* **Model 3** has the inputs of Model 2, except it drops the occupation variable <br>
+
+<br>
+In this process I am looking for the simplest model that still maintains a high level of accuracy
+
+````{r}
+
+#Model 1: Forward Selection Model
+model1 <- glm(over_50k ~ relationship + education_num + capital_gain + capital_gain_ind + poly(age,3) + 
+               occupation + poly(hours_week,3) + capital_loss_ind + sex + country_group + marital_status + race, data = train_logistic, 
+                family = binomial)
+
+#Model 2: Forward Selection model w/ fewer variables
+model2 <- glm(over_50k ~ relationship + education_num + capital_gain + capital_gain_ind + poly(age,3) + 
+                         occupation + poly(hours_week,3) + hours_week_ind + I(hours_week_ind * hours_week) +
+                         capital_loss_ind, data = train_logistic, family = binomial)
+
+
+#Model 3: Same variables as Model 2 except this time I am removing occupation.
+model3 <- glm(over_50k ~ relationship + education_num + capital_gain + capital_gain_ind + poly(age,3) + 
+                         poly(hours_week,3) + hours_week_ind + I(hours_week_ind * hours_week) +
+                         capital_loss_ind, data = train_logistic, family = binomial)
+
+```
+
+Now that I have built the logistic regression models, I'll first compare some performance metrics of the models and then compare their ROC curves
+
+```{r}
+#Calculate Predicted probabilities for each model on validation data
+model1_probs <- predict(model1, newdata = valid_logistic, type = 'response')
+model2_probs <- predict(model2, newdata = valid_logistic, type = 'response')
+model3_probs <- predict(model3, newdata = valid_logistic, type = 'response')
+
+# Calculate the ROC curve for each model on validation data
+logistic_1_roc <- calculate_ROC(probs = model1_probs, response = valid_logistic$over_50k, name =  'Logistic_1')
+logistic_2_roc <- calculate_ROC(probs = model2_probs, response = valid_logistic$over_50k, name =  'Logistic_2')
+logistic_3_roc <- calculate_ROC(probs = model3_probs, response = valid_logistic$over_50k, name =  'Logistic_3')
+
+#generate a table that contains model performance stats
+summary_stats_log <- data.frame(model = c('logistic_1', 'logistic_2', 'logistic_3'),
+                            max_accuracy = c(max(logistic_1_roc$accuracy), max(logistic_2_roc$accuracy),
+                                             max(logistic_3_roc$accuracy)),
+                            auc = c(logistic_1_roc$AUC[1], logistic_2_roc$AUC[2], logistic_3_roc$AUC[3]))
+```
+
+```{r}
+summary_stats_log 
+```
+
+Now lets examine the comparison in ROC curves between the models <br> 
+
+```{r}
+#Combine ROC data
+rocs <- rbind(logistic_1_roc, logistic_2_roc, logistic_3_roc)
+
+
+#Compare them on the same plot
+ggplot(rocs, aes(x = M1SPEC, y = SENSIT)) + geom_line(aes(color = name),lwd = 1.3, alpha= 0.5) + 
+  geom_abline(slope = 1, intercept = 0) + xlim(0,1) + ylim(0,1) + ggtitle('Logistic ROC Curve') + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+Model 2 seems to be the simplest model that still maintains a high model AUC and accuracy. <br>
+<br>
+<br>
+
+I did apply the LASSO penalty to Model 2 to see if the model was overfitting the data, but the penalty ended up being extremely small and none of the variables were dropped.
+```{r, echo = F}
+train_matrix <- model.matrix(over_50k ~ relationship + education_num + capital_gain + 
+                               capital_gain_ind + poly(age,3) + occupation + 
+                               poly(hours_week,3) + hours_week_ind + I(hours_week_ind * hours_week) +
+                               capital_loss_ind, data = train_logistic)
+
+
+train_response <- train_logistic$over_50k %>% as.character %>% as.numeric
+set.seed(15)
+cv_glm <- glmnet::cv.glmnet(train_matrix, train_response, family = "binomial", type.measure = "auc", a = 1)
+lambda <- cv_glm$lambda.min
+glm_mod <- glmnet::glmnet(train_matrix, train_response, family = "binomial", a = 1, lambda = lambda)
+plot(cv_glm)
+```
+<br>
+<br>
+
+***
+***
+
+####**Ensemble Model** <br>
+
+The Ensemble model is a combination of logistic regression and random forest. The ensemble in this case is an average of the predictions out of the two models. <br>
+<br>
+
+
+The ensemble is evaluated by looking at the accuracy, AUC and ROC curve.
+
+```{r}
+#Ensemble with a basic probability average 
+ensemble_probs <- (forest_probs + model2_probs) / 2
+
+#Calculate Ensemble ROC curve
+ensemble_roc <- calculate_ROC(probs = ensemble_probs, response = valid_forest$over_50k, name =  'ensemble')
+
+#create table of summary stats
+summary_stats_ensemble <- data.frame(model = 'Ensemble',
+                            max_accuracy = max(ensemble_roc$accuracy),
+                            auc =  ensemble_roc$AUC[1])
+```
+
+```{r}
+summary_stats_ensemble
+```
+
+
+```{r}
+ggplot(ensemble_roc, aes(x = M1SPEC, y = SENSIT)) + geom_line(aes(color = name), lwd = 1.3, alpha= 0.5) + 
+  geom_abline(slope = 1, intercept = 0) + xlim(0,1) + ylim(0,1) + ggtitle('Ensemble ROC Curve') + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+<br>
+
+***
+***
+
+### Step 6: Model Comparison and Final Selection
+
+To compare the three models: Random Forest, Logistic Regression and the Ensemble, I examine the differences in  accuracy, AUC and ROC curve.
+
+```{r}
+summary_stats <- rbind(summary_stats_forest, summary_stats_ensemble, summary_stats_log[2,])
+summary_stats
+```
+
+```{r}
+rocs <- rbind(ensemble_roc, logistic_2_roc, forest_roc)
+ggplot(rocs, aes(x = M1SPEC, y = SENSIT)) + geom_line(aes(color = name),  lwd = 1.3, alpha= 0.5) + 
+  geom_abline(slope = 1, intercept = 0) + xlim(0,1) + ylim(0,1) + ggtitle('Comparison ROC Curve') + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+The Final Selected model is the logistic regression model. I choose this model because it has a significant lift over just the random forest model, and the improvements made by the ensemble aren't large enough to justify losing the interpretability of the logistic regression model.
+<br>
+<br>
+<br>
+
+##**Test Set Accuracy** 
+###Predicting on the test set, with the cutoff threshold selected which resulted in the highest acuracy on the validation set: The Overall Accuracy was 85.2% Correct 
+```{r}
+cutoff_threshold <- logistic_2_roc$PROB[logistic_2_roc$accuracy == max(logistic_2_roc$accuracy)]
+logistic_probs <- predict(model2, newdata = test_logistic, type = 'response')
+
+predictions <- ifelse(logistic_probs > cutoff_threshold,1,0)
+
+caret::confusionMatrix( predictions, raw_test$over_50k)
+```
+
+***
+***
+
+<br>
+<br>
+
+####Function Code: 
+
+
+
+```{r}
+transform_logistic <- function(data){
+  
+  data %>% 
+    mutate(education_num = ifelse(education_num < 8, 7, education_num),
+           capital_gain = log(capital_gain + 1),
+           capital_gain_ind = ifelse(capital_gain == 0,1,0),
+           capital_loss_ind = ifelse(capital_loss == 0, 0, 1),
+           hours_week_ind = ifelse(hours_week >= 50, 1,0),
+           workclass = ifelse(is.na(workclass), 'missing', as.character(workclass)),
+           occupation = ifelse(is.na(occupation), 'missing', as.character(occupation)),
+           marital_status = ifelse(marital_status %in% c('Married-AF-spouse', 'Married-civ-spouse'), 1,0)) %>% 
+    group_by(country) %>% 
+    mutate(pct_over_50k = sum(as.numeric(as.character(over_50k)))/n()) %>% 
+    mutate(country_group = cut(pct_over_50k, seq(0,.46, by = .051), labels = letters[1:9])) %>%  
+    ungroup() %>% 
+    mutate_each(funs(factor(.)), -c(age:hours_week, capital_gain_ind, hours_week_ind)) %>% 
+    select(-split_number) -> transformed_data
+  
+  return(transformed_data)
+  
+}
+
+
+transform_forest <- function(data){
+  data[is.na(data)] <- 'missing'
+  data %>% 
+    mutate_each(funs(as.factor(.)), -c(age:hours_week)) %>% 
+    select(-split_number, -education_num) -> data
+  
+  return(data)
+}
+```
+
+
+```{r}
+#' Calculate the ROC curve for a given model
+#' @description This function calculates the roc curve and returns the data in a data frame
+#' @param model  model of interest
+#' @param response  response variable
+#' @param name  name of model
+#' @param probs predicted probabilities
+#' @export
+calculate_ROC <- function(model = NULL, response, name, probs = NULL){
+  df <- NULL
+  tp_rates <- NULL
+  fp_rates <- NULL
+  probs <- if(is.null(probs)){predict(model, type= 'response')} else{probs}
+  AUC <- as.numeric(pROC::auc(response, probs))
+  for(threshold in 0:200){
+    preds <- ifelse(probs >= (threshold/200), 1,0)
+    confusion_matrix <- caret::confusionMatrix(preds, response)$table
+    POS <- confusion_matrix[2,2]
+    NEG <- confusion_matrix[1,1]
+    FALPOS <- confusion_matrix[2,1]
+    FALNEG <- confusion_matrix[1,2]
+    tp_rate <- POS / (POS + FALNEG)
+    fp_rate <- FALPOS / (NEG + FALPOS)
+    tn_rate <- NEG / (NEG + FALPOS)
+    SPECIFICITY  <- tn_rate
+    SENSIT <- tp_rate
+    M1SPEC <- 1 - SPECIFICITY
+    df <- rbind(df, data.frame(name, AUC,'PROB' = threshold/200,
+                               POS, NEG, FALPOS, FALNEG, SENSIT,
+                               M1SPEC, youden_index = (SENSIT + SPECIFICITY - 1),
+                               accuracy = (POS + NEG)/(POS + NEG + FALPOS + FALNEG)))
+
+  }
+ 
+  return(df)
+}
+
+
+
+```
+
+
+
+
+
+
