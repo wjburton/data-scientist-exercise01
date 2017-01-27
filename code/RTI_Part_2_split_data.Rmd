@@ -1,0 +1,48 @@
+---
+title: "RTI Data Science Exercise Step 3"
+output: html_notebook
+---
+
+<br>
+<br>
+
+  
+###Step 3: Split the data into Training, Validation, and Test sets
+  
+***
+  
+```{r}
+# set the random seed for reproducibility
+set.seed(143)
+
+# Create a vector with 1's 2's and 3's .
+# each value has the proportion occurring that is desired
+# for the training, validation, and test data splits. 
+n <- nrow(records) 
+split_number <-  c( rep(1, ceiling( n * 0.7) ), 
+                    rep(2, ceiling( n * 0.2) ),
+                    rep(3, ceiling( n * 0.1) ) )
+
+# Randomize the Split levels
+records$split_number  <- split_number[sample(1:n,n)] # assign random split
+
+  
+# save each split to a different object
+records %>% 
+  filter(split_number == 1) -> train
+  
+records %>% 
+  filter(split_number == 2) -> valid
+  
+records %>% 
+  filter(split_number == 3) -> test
+  
+  
+# write each to a csv
+write.csv(train, 'C:/Users/Will/Documents/MSA/jobs/rti_challenge/data-scientist-exercise01/data/train.csv', row.names = F)
+write.csv(valid, 'C:/Users/Will/Documents/MSA/jobs/rti_challenge/data-scientist-exercise01/data/valid.csv', row.names = F)
+write.csv(test, 'C:/Users/Will/Documents/MSA/jobs/rti_challenge/data-scientist-exercise01/data/test.csv', row.names = F)
+```
+
+***
+***
