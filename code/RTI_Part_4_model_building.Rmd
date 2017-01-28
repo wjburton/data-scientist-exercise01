@@ -490,6 +490,15 @@ calculate_ROC <- function(model = NULL, response, name, probs = NULL){
 
 ```
 
+```{r, echo = F}
+logistic_2_roc$name <- 'Logistic Regression'
+rocs <- rbind(logistic_2_roc, forest_roc)
+names(rocs)[1] <- 'Model Type'
+
+ggplot(rocs, aes(x = M1SPEC, y = SENSIT)) + geom_line(aes(color = `Model Type`),  lwd = 1.3, alpha= 0.5) + 
+  geom_abline(slope = 1, intercept = 0) + xlim(0,1) + ylim(0,1) + ggtitle('Comparison ROC Curve') + 
+  theme(plot.title = element_text(hjust = 0.5))
+```
 
 
 

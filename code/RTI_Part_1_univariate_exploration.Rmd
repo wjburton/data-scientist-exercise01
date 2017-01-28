@@ -10,7 +10,7 @@ output: html_notebook
 
 ###**Step 1.** Read in and Stage data for Analysis <br>
 ###**Step 2.** High Level and Univariate Exploratory Analysis <br>
-###**Step 4.** Split the data into Training, Validation, and Test sets <br>
+###**Step 3.** Split the data into Training, Validation, and Test sets <br>
 ###**Step 4.** Variable Associations With The Response <br>
 ###**Step 5.** Variable Transformation and Creation <br>
 ###**Step 6.** Model Building <br>
